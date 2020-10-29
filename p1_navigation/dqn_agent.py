@@ -2,25 +2,26 @@ import numpy as np
 import random
 
 from model import QNetwork, DuelQNetwork
-from replay_buffer import ReplayBuffer
+from replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
+BUFFER_SIZE = int(1e4)  # replay buffer size
 BATCH_SIZE = 64         # minibatch size
 GAMMA = 0.99            # discount factor
-TAU = 1e-3              # for soft update of target parameters
-LR = 5e-4               # learning rate 
-UPDATE_EVERY = 4        # how often to update the network
+TAU = 1e-2              # for soft update of target parameters
+LR = 1e-3               # learning rate 
+UPDATE_EVERY = 16        # how often to update the network
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class Agent():
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, seed, double_dqn=False, duel_dqn=False):
+    def __init__(self, state_size, action_size, seed, lr_decay=0.9999,
+                 double_dqn=False, duel_dqn=False, prio_exp=False):
         """Initialize an Agent object.
         
         Params
@@ -28,14 +29,18 @@ class Agent():
             state_size (int): Dimension of each State
             action_size (int): Dimension of each Action
             seed (int): Random Seed
+            lr_decay (float): Decay float for alpha learning rate
             DOUBLE DQN (boolean): Indicator for Double Deep Q-Network
             DUEL DQN (boolean): Indicator for Duel Deep Q-Network
+            PRIORITISED_EXPERIENCE (boolean): Indicator for Prioritized Experience Replay
         """
         self.state_size = state_size
         self.action_size = action_size
         self.seed = random.seed(seed)
+        self.lr_decay = lr_decay
         self.DOUBLE_DQN = double_dqn
         self.DUEL_DQN = duel_dqn
+        self.PRIORITISED_EXPERIENCE = prio_exp
 
         # Determine Deep Q-Network for use
         if self.DUEL_DQN:
@@ -47,9 +52,14 @@ class Agent():
         
         # Initialize Optimizer
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
-
-        # Replay memory
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        
+        # Determine if Prioritized Experience will be used
+        if self.PRIORITISED_EXPERIENCE:
+            self.memory = PrioritizedReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed, 
+                                                  alpha = 0.6, beta = 0.4, beta_anneal = 1.0001)
+        else:
+            self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+            
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
     
@@ -93,7 +103,10 @@ class Agent():
             experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
+        if self.PRIORITISED_EXPERIENCE:
+            states, actions, rewards, next_states, dones, weights = experiences
+        else:
+            states, actions, rewards, next_states, dones = experiences
         
         if self.DOUBLE_DQN:
             # Select max Action for Next State from Local NN
@@ -109,15 +122,23 @@ class Agent():
         
         # Get Expected Q values from Local NN
         Q_expected = self.qnetwork_local(states).gather(1, actions)
+        
+        if self.PRIORITISED_EXPERIENCE:
+            td_error = (Q_expected - Q_targets).squeeze_()           # Compute TD Error
+            td_error_detached = td_error.detach()
+            
+            self.memory.update_probabilities(td_error_detached)      # Update Probabilities
+            
+            loss = ((td_error**2)*weights).mean()                    # Compute Weighted Loss
+        else:
+            loss = F.mse_loss(Q_expected, Q_targets)                 # Compute Loss
 
-        # Compute Loss
-        loss = F.mse_loss(Q_expected, Q_targets)
         # Minimize the loss
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         
-        # ------------------- update Target Network ------------------- #
+        # ------------------- Update Target Network ------------------- #
         self.soft_update(self.qnetwork_local, self.qnetwork_target, TAU)                     
 
     def soft_update(self, local_model, target_model, tau):

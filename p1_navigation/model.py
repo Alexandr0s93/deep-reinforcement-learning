@@ -17,11 +17,13 @@ class QNetwork(nn.Module):
         
         # Define Deep Q-Network Layers
         self.dqn_layers = nn.Sequential(
-            nn.Linear(state_size, 64),
+            nn.Linear(state_size, 128),
             nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, action_size)
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_size)
         )
 
     def forward(self, state):
@@ -41,27 +43,26 @@ class DuelQNetwork(nn.Module):
             action_size (int): Dimension of each action
             seed (int): Random seed
         """
-        super(Duel_QNetwork, self).__init__()
+        super(DuelQNetwork, self).__init__()
         self.seed = torch.manual_seed(seed)
         
         # Define Feature Layers
         self.feature_layers = nn.Sequential(
-            nn.Linear(state_size, 64),
+            nn.Linear(state_size, 128),
             nn.ReLU(),
-            nn.Linear(64, 64)
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU()
         )
         
         # Define Value Stream
         self.value_stream = nn.Sequential(
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(32, 1)
         )
         # Define Advantage Layers
         self.advantage_stream = nn.Sequential(
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, action_size)
+            nn.Linear(32, action_size)
         )
 
     def forward(self, state):
