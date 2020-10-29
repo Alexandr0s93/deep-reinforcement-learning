@@ -82,7 +82,7 @@ class PrioritizedReplayBuffer:
         self.beta = beta
         self.beta_anneal = beta_anneal
         
-        self.max_p = 0.1             # Max Probability to choose
+        self.max_p = 0.1                # Max Probability to choose
         self.min_p = 0.00001            # Constant e for non-zero Probability
         
         self.p = np.empty(buffer_size)  # Probabilities array
