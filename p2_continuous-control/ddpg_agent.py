@@ -1,3 +1,5 @@
+from collections import namedtuple, deque
+import copy
 import numpy as np
 import random
 
@@ -9,14 +11,14 @@ from model import Actor, Critic
 from replay_buffer import ReplayBuffer
 from noise import OUNoise
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 128        # minibatch size
+BUFFER_SIZE = int(1e6)  # replay buffer size
+BATCH_SIZE = 256        # minibatch size
 GAMMA = 0.99            # discount factor
-LR_ACTOR = 1e-3         # learning rate of actor
+LR_ACTOR = 1e-4         # learning rate of actor
 LR_CRITIC = 1e-3        # learning rate of critic
 TAU = 1e-3              # for soft update of target parameters
-NOISE_DEC = 0.999       # decay rate for noise
-
+LEARN_EVERY = 2         # learn every LEARN_EVERY steps
+LEARN_NB = 1            # how often to execute the learn-function each LEARN_EVERY steps
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -31,14 +33,12 @@ class Agent():
             state_size (int): Dimension of each State
             action_size (int): Dimension of each Action
             seed (int): Random Seed
-            lr_decay (float): Decay float for alpha learning rate
-            DOUBLE DQN (boolean): Indicator for Double Deep Q-Network
-            DUEL DQN (boolean): Indicator for Duel Deep Q-Network
-            PRIORITISED_EXPERIENCE (boolean): Indicator for Prioritized Experience Replay
         """
         self.state_size = state_size
         self.action_size = action_size
         self.seed = random.seed(seed)
+        self.t_step = 0
+        self.i_learn = 0  # for learning every n steps
         
         # Actor Network
         self.actor_local = Actor(state_size, action_size, seed).to(device)
@@ -54,10 +54,9 @@ class Agent():
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
         
         # Initialize Noise Process
-        self.noise = OUNoise(action_size, seed)
-        self.noise_decay = NOISE_DEC
-        
-    def act(self, state, noise=True):
+        self.noise = OUNoise(20*action_size, seed)
+            
+    def act(self, state, noise=True, noise_factor = 1.):
         """Returns actions for given state as per current policy."""
         state = torch.from_numpy(state).float().to(device)
         self.actor_local.eval()
@@ -67,20 +66,22 @@ class Agent():
         self.actor_local.train()
 
         if noise:
-            action += self.noise_decay * self.noise.sample()  # Add Noise for Exploration
-            self.noise_decay *= self.noise_decay              # Decay Noise to balance Exploitation
+            action += noise_factor * self.noise.sample().reshape((-1, 4))  # Add Noise for Exploration
 
         return np.clip(action, -1, 1)
     
-    def step(self, states, actions, rewards, next_states):
+    def step(self, states, actions, rewards, next_states, dones):
         """Save experience in replay buffer, and use random sample from buffer to learn."""
         # Save experience in memory
-        self.memory.add(states, actions, rewards, next_states)
-
-        # Learn, if enough samples are available in memory
-        if len(self.memory) > BATCH_SIZE:
-            experiences = self.memory.sample()
-            self.learn(experiences)
+        for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
+            self.memory.add(state, action, reward, next_state, done)
+        
+        self.i_learn = (self.i_learn + 1) % LEARN_EVERY
+        # Learn every LEARN_EVERY steps if enough samples are available in memory
+        if len(self.memory) > BATCH_SIZE and self.i_learn == 0:
+            for _ in range(LEARN_NB):
+                experiences = self.memory.sample()
+                self.learn(experiences)
     
     def learn(self, experiences):
         """Update policy and value parameters using given batch of experience tuples.
@@ -90,24 +91,24 @@ class Agent():
             critic_target(state, action) -> Q-value
         Params
         ======
-            experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s') tuples 
+            experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
         """
-        states, actions, rewards, next_states = experiences
+        states, actions, rewards, next_states, dones = experiences
         
         # ---------------------------- Update Critic ---------------------------- #
         actions_next = self.actor_target(next_states)                   # Get Next Actions from Actor Target
         Q_targets_next = self.critic_target(next_states, actions_next)  # Get Next-State Q-Values from Critic Target
-        Q_targets = rewards + (GAMMA * Q_targets_next)                  # Compute Target Q
+        Q_targets = rewards + (GAMMA*Q_targets_next*(1 - dones))        # Compute Target Q
         Q_expected = self.critic_local(states, actions)                 # Compute Expected Q
         critic_loss = F.mse_loss(Q_expected, Q_targets)                 # Compute Critic Loss
         
         # Minimize the Loss for Critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
         
-        # ---------------------------- Update Actor ---------------------------- #
-        
+        # ---------------------------- Update Actor ---------------------------- #        
         actions_pred = self.actor_local(states)                         # Compute Next Actions from Actor Local
         actor_loss = -self.critic_local(states, actions_pred).mean()    # Get Actor Loss
         

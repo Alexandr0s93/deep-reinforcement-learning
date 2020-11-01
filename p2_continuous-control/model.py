@@ -24,28 +24,27 @@ class Actor(nn.Module):
         self.seed = torch.manual_seed(seed)
         
         # Define Actor Layers
+        self.bn1d = nn.BatchNorm1d(state_size)
         self.fc1 = nn.Linear(state_size, 128)
-        self.bn1d = nn.BatchNorm1d(128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.output = nn.Linear(32, action_size)        
+        self.fc2 = nn.Linear(128, 128)
+        self.output = nn.Linear(128, action_size)
+        
+        # Reset Weights & Bias
+        self.reset_parameters()
         
     def reset_parameters(self):
         """Reset the parameters of the hidden units."""
         self.fc1.weight.data.uniform_(*hidden_init(self.fc1))
         self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
-        self.fc3.weight.data.uniform_(*hidden_init(self.fc3))
         self.output.weight.data.uniform_(-3e-3, 3e-3)        
-
+        
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions."""
-        x = self.fc1(state)
-        x = F.relu(x)
-        x = self.bn1d(x)
+        x = self.bn1d(state)
+        x = self.fc1(x)
+        x = F.leaky_relu(x)
         x = self.fc2(x)
-        x = F.relu(x)
-        x = self.fc3(x)
-        x = F.relu(x)
+        x = F.leaky_relu(x)
         x = self.output(x)
         x = torch.tanh(x)       
         return x
@@ -67,28 +66,27 @@ class Critic(nn.Module):
         self.seed = torch.manual_seed(seed)
         
         # Define Critic Layers
+        self.bn1d = nn.BatchNorm1d(state_size)
         self.fc1 = nn.Linear(state_size, 128)
-        self.bn1d = nn.BatchNorm1d(128)
-        self.fc2 = nn.Linear(128 + action_size, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.output = nn.Linear(32, 1)
+        self.fc2 = nn.Linear(128 + action_size, 128)
+        self.output = nn.Linear(128, 1)
+        
+        # Reset Weights & Bias
+        self.reset_parameters()
         
     def reset_parameters(self):
         """Reset the parameters of the hidden units."""
         self.fc1.weight.data.uniform_(*hidden_init(self.fc1))
         self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
-        self.fc3.weight.data.uniform_(*hidden_init(self.fc3))
         self.output.weight.data.uniform_(-3e-3, 3e-3)
         
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
-        x = self.fc1(state)
-        x = F.relu(x)
-        x = self.bn1d(x)
-        x = torch.cat((x, action.float()), dim=1)
+        x = self.bn1d(state)
+        x = self.fc1(x)
+        x = F.leaky_relu(x)
+        x = torch.cat((x, action), dim=1)
         x = self.fc2(x)
-        x = F.relu(x)
-        x = self.fc3(x)
-        x = F.relu(x)
+        x = F.leaky_relu(x)
         x = self.output(x)
         return x
