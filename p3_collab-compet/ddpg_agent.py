@@ -49,7 +49,7 @@ class DDPGAgent():
         self.actor_local.train()
         
         if add_noise:
-            action += noise_factor*self.noise.sample().reshape((-1, 2))
+            action += noise_factor*self.noise.sample()
         return np.clip(action, -1, 1)
 
     def learn(self, experiences):
@@ -80,7 +80,7 @@ class DDPGAgent():
         # Minimize the Loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+#         torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         # ---------------------------- Update Actor ---------------------------- #
@@ -91,7 +91,7 @@ class DDPGAgent():
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()        
-        torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
+#         torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
         self.actor_optimizer.step()
 
         # ----------------------- update target networks ----------------------- #

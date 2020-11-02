@@ -4,7 +4,7 @@
 
 The project is considered solvable if the Agents achieve a **Max 0.5 Average Score** over the last 100-episodes.
 
-The following implementation achieves this goal in **???** by utilizing **2 Agents** that use the `Deep Deterministic Policy Gradient (DDPG) Algorithm`. In this approach the below components are used:
+The following implementation achieves this goal in **941** by utilizing **2 Agents** that use the `Deep Deterministic Policy Gradient (DDPG) Algorithm`. In this approach the below components are used:
 
 - Actor Neural Network
 - Critic Neural Network
@@ -62,14 +62,16 @@ To facilitate **Exploration** a Noise component is added which decays over time 
 The DDPG Algorithm utilizes the Actor Network to choose an action based on a particular state and then uses the Critic network to evaluate that action and learn. The overall Agents' scores can be seen in the below graph followed by the individual Agent's scores:
 
 <p align="center">
-  <img src="../img/Overall_Agent_scores.png" />
+  <img src="../img/Tennis_scores.png" />
 </p>
 
-As illustrated the Agents achieves an average score of 30 in 96 Episodes. During training of the Agent the following `Hyperparameters` were used.
+As illustrated the Agents achieves an average score of 0.5 in 941 Episodes. Additionally, we can observe from the graph that the Agent reaching max scores of 2.5 in later episodes. During training of the Agent the following `Hyperparameters` were used.
 
 #### 1. Environment Hyperparameters
 
-- No Noise Decay has been used
+- Noise Start: 2.0
+- Noise Min: 0.01
+- Noise Decay: 0.999
 
 #### 2. Agent Hyperparameters
 

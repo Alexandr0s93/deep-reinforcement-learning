@@ -26,7 +26,6 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.seed = torch.manual_seed(seed)
         
-        self.bn1d = nn.BatchNorm1d(state_size)
         self.fc1 = nn.Linear(state_size, 200)
         self.fc2 = nn.Linear(200, 150)
         self.output = nn.Linear(150, action_size)
@@ -41,11 +40,7 @@ class Actor(nn.Module):
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions."""
         # Reshape the state to comply with Batch Normalization
-        if state.dim() == 1:
-            state = torch.unsqueeze(state,0)
-        
-        x = self.bn1d(state)
-        x = self.fc1(x)
+        x = self.fc1(state)
         x = F.relu(x)
         x = self.fc2(x)
         x = F.relu(x)
@@ -67,10 +62,9 @@ class Critic(nn.Module):
         """
         super(Critic, self).__init__()
         self.seed = torch.manual_seed(seed)
-        
-        self.bn1d = nn.BatchNorm1d(state_size*2)
-        self.fc1 = nn.Linear(state_size*2, 200)
-        self.fc2 = nn.Linear(200+2*action_size, 150)
+
+        self.fc1 = nn.Linear((state_size+action_size)*2, 200)
+        self.fc2 = nn.Linear(200, 150)
         self.output = nn.Linear(150, 1)
         
         self.reset_parameters()
@@ -82,14 +76,10 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action, action) pairs -> Q-values."""
-        # Reshape the state to comply with Batch Normalization
-        if state.dim() == 1:
-            state = torch.unsqueeze(state,0)
-            
-        x = self.bn1d(state)
+        # Reshape the state to comply with Batch Normalization            
+        x = torch.cat((state, action), dim=1)
         x = self.fc1(x)
         x = F.relu(x)
-        x = torch.cat((x, action), dim=1)
         x = self.fc2(x)
         x = F.relu(x)
         x = self.output(x)
