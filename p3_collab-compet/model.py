@@ -27,9 +27,9 @@ class Actor(nn.Module):
         self.seed = torch.manual_seed(seed)
         
         self.bn1d = nn.BatchNorm1d(state_size)
-        self.fc1 = nn.Linear(state_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.output = nn.Linear(128, action_size)
+        self.fc1 = nn.Linear(state_size, 200)
+        self.fc2 = nn.Linear(200, 150)
+        self.output = nn.Linear(150, action_size)
         
         self.reset_parameters()
 
@@ -40,11 +40,15 @@ class Actor(nn.Module):
 
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions."""
+        # Reshape the state to comply with Batch Normalization
+        if state.dim() == 1:
+            state = torch.unsqueeze(state,0)
+        
         x = self.bn1d(state)
         x = self.fc1(x)
-        x = F.leaky_relu(x)
+        x = F.relu(x)
         x = self.fc2(x)
-        x = F.leaky_relu(x)
+        x = F.relu(x)
         x = self.output(x)
         x = torch.tanh(x)
         return x
@@ -64,10 +68,10 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         self.seed = torch.manual_seed(seed)
         
-        self.bn1d = nn.BatchNorm1d(state_size)
-        self.fc1 = nn.Linear(state_size, 128)
-        self.fc2 = nn.Linear(128+2*action_size, 128)
-        self.output = nn.Linear(128, 1)
+        self.bn1d = nn.BatchNorm1d(state_size*2)
+        self.fc1 = nn.Linear(state_size*2, 200)
+        self.fc2 = nn.Linear(200+2*action_size, 150)
+        self.output = nn.Linear(150, 1)
         
         self.reset_parameters()
 
@@ -76,13 +80,17 @@ class Critic(nn.Module):
         self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
         self.output.weight.data.uniform_(-3e-3, 3e-3)
 
-    def forward(self, state, action, action_other_player):
+    def forward(self, state, action):
         """Build a critic (value) network that maps (state, action, action) pairs -> Q-values."""
+        # Reshape the state to comply with Batch Normalization
+        if state.dim() == 1:
+            state = torch.unsqueeze(state,0)
+            
         x = self.bn1d(state)
         x = self.fc1(x)
-        x = F.leaky_relu(x)
-        x = torch.cat((x, action, action_other_player), dim=1)
+        x = F.relu(x)
+        x = torch.cat((x, action), dim=1)
         x = self.fc2(x)
-        x = F.leaky_relu(x)
+        x = F.relu(x)
         x = self.output(x)
         return x

@@ -58,5 +58,3 @@ The Agent training and navigation can be found in `Continuous_Control.ipynb`! Th
 - `ddpg_agent.py` - Contains an implementation of the DDPG algorithm.
 - `replay_buffer.py` - Contains a Replay Buffer implementation.
 - `noise.py` - Contains a Ornstein-Uhlenbeck implementation for adding Noise.
-
-Follow the instructions in  to get started with training your own agent!
